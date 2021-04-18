@@ -4,3 +4,4 @@ __pycache__
 icon
 code
 saved_url
+*.log

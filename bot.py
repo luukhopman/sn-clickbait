@@ -2,6 +2,7 @@ import os
 import re
 import json
 import pickle
+import logging
 import datetime
 import requests
 import tweepy as tp
@@ -9,8 +10,13 @@ import unidecode
 from bs4 import BeautifulSoup
 
 DEV = True
-TEST_URL = 'https://www.soccernews.nl/news/780829/knvb-vervangt-de-boer-na-het-ek'
+TEST_URL = 'https://www.soccernews.nl/news/797733/hierom-investeren-bedrijven-vijftig-miljoen-in-psv'
 SAVE_FILE = 'saved_url'
+
+logging.basicConfig(filename='bot.log',
+                    format='%(asctime)s %(levelname)s:%(message)s',
+                    datefmt=r'%Y-%m-%d %H:%M:%S',
+                    level=logging.INFO)
 
 
 class ClickbaitBot:
@@ -50,7 +56,6 @@ class ClickbaitBot:
             with open(self.save_file, 'wb') as f:
                 pickle.dump(article_url, f)
             return True
-
         if article_url == saved_url:
             return False
         else:
@@ -113,9 +118,9 @@ class ClickbaitBot:
                         'article:published_time')[0:10]
                     timestamp = '{:%Y-%m-%d}'.format(datetime.datetime.now())
                     if date == timestamp:  # If published totday
-                        return '[Bron] {}'.format(link)
-        except Exception:
-            pass
+                        return '\U0001f4dd {}'.format(link)
+        except Exception as e:
+            logging.error(e)
         return None
 
     def check_article(self, title, preface, body):
@@ -125,19 +130,19 @@ class ClickbaitBot:
         text = ' '.join(body)
         article_length = len(preface) + len(text)
         if article_length < 400:
-            print('Article too short', article_length)
+            logging.info(f'Article too short ({article_length} words)')
             return False
         if article_length > 2000:
-            print('Article too long', article_length)
+            logging.info(f'Article too long ({article_length} words)')
             return False
         if 'greep uit de reacties' in text.lower():
-            print('Twitter reacties')
+            logging.info('Tweets')
             return False
         if 'scoreverloop' in text.lower():
-            print('Wedstrijdrapport')
+            logging.info('Match report')
             return False
         if title.lower().startswith(('de 11', 'opstelling')):
-            print('Opstelling')
+            logging.info('Line-up')
             return False
         return True
 
@@ -163,18 +168,18 @@ class ClickbaitBot:
         if keyword_list:
             keywords = '(' + ', '.join(keyword_list) + ')'
         else:
-            keywords = ''
+            keywords = None
 
         if title[0] not in ["'", '"']:
             title = "'" + title + "'"
 
         source_url = self.get_source_url(text)
+
+        tweet_text = '{}'.format(title)
         if source_url:
-            tweet_text = '\U0001F916 {}\n\n{}\n\n{}'.format(
-                title, keywords, source_url)
-        else:
-            tweet_text = '\U0001F916 {}\n\n{}'.format(
-                title, keywords)
+            tweet_text += '\n\n{}'.format(source_url)
+        if keywords:
+            tweet_text += '\n\n{}'.format(keywords)
 
         return tweet_text
 
@@ -247,9 +252,10 @@ class ClickbaitBot:
         '''Tweets the tweet text and image'''
         if DEV == False:
             self.get_twitter_api().update_with_media('out.png', tweet_text)
-            print('Posted new image')
+            logging.info('Posted new image')
         else:
-            print('[DEV MODE]\t', tweet_text[2:])
+            tweet_text = tweet_text.replace('\U0001f4dd ', '')
+            logging.info(f"[DEV] {tweet_text}")
 
     def main(self):
         if self.test_url:
@@ -267,7 +273,7 @@ class ClickbaitBot:
                 self.draw_image(title, preface, body)
                 self.tweet_image(tweet_text)
         else:
-            print('No new article')
+            logging.info('No new article')
         return new_article
 
 
