@@ -10,7 +10,7 @@ import unidecode
 from bs4 import BeautifulSoup
 
 DEV = True
-TEST_URL = 'https://www.soccernews.nl/news/797733/hierom-investeren-bedrijven-vijftig-miljoen-in-psv'
+TEST_URL = 'https://www.soccernews.nl/news/851397/raiola-brobbey-kan-het-best-terug-gaan-naar-ajax'
 SAVE_FILE = 'saved_url'
 
 logging.basicConfig(filename='bot.log',
@@ -37,7 +37,7 @@ class ClickbaitBot:
 
     def retrieve_article_url(self, username):
         '''
-        Returns the last article url tweeted on Twitter account 
+        Returns the last article url tweeted on Twitter account
         '''
         last_tweet = self.get_twitter_api().user_timeline(username, count=1)[0]
         last_url = str(last_tweet.entities['urls'][0]['expanded_url'])
@@ -49,19 +49,19 @@ class ClickbaitBot:
         Returns True if the bot has not encountered the article
         '''
         file_exists = os.path.isfile(self.save_file)
-        if file_exists:
+        if not file_exists:
+            with open(self.save_file, 'wb') as f:
+                pickle.dump(article_url, f)
+            return True
+        else:
             with open(self.save_file, 'rb') as f:
                 saved_url = pickle.load(f)
-        else:
-            with open(self.save_file, 'wb') as f:
-                pickle.dump(article_url, f)
-            return True
-        if article_url == saved_url:
-            return False
-        else:
-            with open(self.save_file, 'wb') as f:
-                pickle.dump(article_url, f)
-            return True
+            if article_url == saved_url:
+                return False
+            else:
+                with open(self.save_file, 'wb') as f:
+                    pickle.dump(article_url, f)
+                return True
 
     def scrape_article(self, url):
         '''
@@ -80,14 +80,16 @@ class ClickbaitBot:
                 'meta', attrs={'name': 'keywords'})['content'].split(',')
 
             paragraphs = str(page_soup.findAll('p')[1])
-            paragraphs = paragraphs.split('<blockquote')[0].split('<br/><br/>')
+            paragraphs = paragraphs.split('<blockquote')[0].split('</p><p>')
         except UnicodeDecodeError as e:
-            raise UnicodeDecodeError('Problem with the article encountered')
+            raise UnicodeDecodeError('Problem with the article encountered', e)
 
         body = []
         for paragraph in paragraphs:
+            if 'bet365' in paragraph:
+                continue
             paragraph = re.sub(re.compile('<.*?>'), '', paragraph)
-            if paragraph is not None:
+            if paragraph:
                 body.append(paragraph)
 
         return title, preface, body, keywords
@@ -110,7 +112,7 @@ class ClickbaitBot:
                 url = 'https://www.googleapis.com/customsearch/v1?key={}&cx={}&q={}'.format(
                     os.environ['API_KEY'], os.environ['SEARCH_ENGINE_ID'], quote)
                 data = requests.get(url).json()
-                search_items = data.get("items")
+                search_items = data.get('items')
 
                 if search_items:
                     link = search_items[0].get('link')
@@ -135,7 +137,7 @@ class ClickbaitBot:
         if article_length > 2000:
             logging.info(f'Article too long ({article_length} words)')
             return False
-        if 'greep uit de reacties' in text.lower():
+        if 'twitter' in title.lower():
             logging.info('Tweets')
             return False
         if 'scoreverloop' in text.lower():
@@ -266,6 +268,7 @@ class ClickbaitBot:
             new_article = self.check_new_article_url(article_url)
 
         if new_article or DEV:
+            logging.info(article_url)
             title, preface, body, keywords = self.scrape_article(article_url)
             accepted_article = self.check_article(title, preface, body)
             if accepted_article:
