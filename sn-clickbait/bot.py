@@ -31,8 +31,8 @@ class Article:
             self.new_article = self.check_new_url()
 
         if self.new_article:
-            self.soup = self.scrape_article()
-            self.title = self.parce_title()
+            self.soup = self.get_article_soup()
+            self.title = self.parse_title()
             self.preface = self.parse_preface()
             self.keywords = self.parse_keywords()
             self.body = self.parse_body()
@@ -40,7 +40,9 @@ class Article:
             self.source_url = self.get_source_url()
 
     def retrieve_url(self):
-        """Returns the last article url tweeted on Twitter account."""
+        """
+        Returns the last article url tweeted on Twitter account.
+        """
         last_tweet = self.api.user_timeline(self.USERNAME, count=1)[0]
         url = last_tweet.entities['urls'][0]['expanded_url']
         url = unidecode.unidecode(url)
@@ -48,7 +50,10 @@ class Article:
         return url
 
     def check_new_url(self):
-        """Returns True is the bot has not encountered the article before."""
+        """
+        Returns True is the bot has not encountered the article before.
+        Writes url of last article to pickle.
+         """
         file_exists = os.path.isfile(self.SAVE_FILE)
         if not file_exists:
             with open(self.SAVE_FILE, 'wb') as f:
@@ -65,8 +70,10 @@ class Article:
                     pickle.dump(self.url, f)
                 return True
 
-    def scrape_article(self):
-        """Scrapes and returns the article title, preface, body and keywords"""
+    def get_article_soup(self):
+        """
+        Requests the url and returns the parsed page soup.
+        """
         try:
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:25.0)'}
@@ -77,16 +84,22 @@ class Article:
         except UnicodeDecodeError as e:
             raise UnicodeDecodeError('Problem with the article encountered', e)
 
-    def parce_title(self):
-        """Parses the title from the article."""
+    def parse_title(self):
+        """
+        Parses the title from the article.
+        """
         return self.soup.find('h1', {'itemprop': 'headline'}).text
 
     def parse_preface(self):
-        """Parses the preface from the article."""
+        """
+        Parses the preface from the article.
+        """
         return self.soup.find('p', attrs={'class': 'prelude'}).text
 
     def parse_body(self):
-        """Parses the body text from the article"""
+        """
+        Parses the body text from the article
+        """
         paragraphs = str(self.soup.findAll('p')[1])
         paragraphs = paragraphs.split('<blockquote')[0].split('</p><p>')
 
@@ -101,11 +114,15 @@ class Article:
         return body
 
     def parse_keywords(self):
-        """Parses the keywords from the article metadata"""
+        """
+        Parses the keywords from the article metadata
+         """
         return self.soup.find('meta', attrs={'name': 'keywords'})['content'].split(',')
 
     def check_article(self):
-        """Filters the articles based on several criteria."""
+        """
+        Filters the articles based on several criteria.
+        """
         text = ' '.join(self.body)
         article_length = len(self.preface) + len(text)
         if article_length < 400:
@@ -125,7 +142,9 @@ class Article:
         return True
 
     def get_source_url(self):
-        """Attemps to find the article source and returns its url."""
+        """
+        Attemps to find the article source and returns its url.
+        """
         text = ' '.join(self.body)
         sources = ['Algemeen Dagblad', 'Voetbal International',
                    'Telegraaf', 'Eindhovens Dagblad', 'Fox Sports']
@@ -162,7 +181,7 @@ class TextImage:
     Turns scraped article into an image.
     """
 
-    IMG_WIDTH = 1000
+    IMG_WIDTH = 1100
 
     TITLE_FONT = ImageFont.truetype('fonts/Roboto-Bold.ttf', 44)
     PREFACE_FONT = ImageFont.truetype('fonts/Roboto-Medium.ttf', 38)
@@ -174,20 +193,20 @@ class TextImage:
     SIDE_PAD = 25
     TITLE_PAD = 16
     PREFACE_PAD = 32
-    BODY_PAD = 48
+    BODY_PAD = 32
 
     OUT_PATH = 'img.png'
 
-    def __init__(self, title, preface, body):
-        self.title = title
-        self.preface = preface
-        self.body = body
+    def __init__(self, article):
+        self.title = article.title
+        self.preface = article.preface
+        self.body = article.body
 
         self.title_parsed = self.parse_text(self.title, self.TITLE_FONT)
         self.preface_parsed = self.parse_text(self.preface, self.PREFACE_FONT)
 
         body_parsed = []
-        for paragraph in body:
+        for paragraph in self.body:
             parsed_paragraph = self.parse_text(paragraph, self.BODY_FONT)
             body_parsed.append(parsed_paragraph)
         self.body_parsed = '\n\n'.join(body_parsed)
@@ -202,7 +221,9 @@ class TextImage:
         self.path = self.draw_image()
 
     def parse_text(self, text, font):
-        """Splits text into fixed-width parts."""
+        """
+        Splits text into fixed-width parts.
+        """
         word_list = [word + ' ' for word in text.split()]
 
         word_idx = 0
@@ -221,14 +242,18 @@ class TextImage:
 
     @staticmethod
     def get_text_height(text, font):
-        """Determine text height using a scratch image."""
+        """
+        Determine text height using a scratch image.
+        """
         img = Image.new('RGBA', (1, 1))
         d = ImageDraw.Draw(img)
         height = d.textsize(text, font)[1]
         return height
 
     def draw_image(self):
-        """Creates the articles in image format. Saves image as PNG."""
+        """
+        Creates the articles in image format. Saves image as PNG.
+        """
         y_title = self.TITLE_PAD
         y_preface = y_title + self.title_height + self.PREFACE_PAD
         y_body = y_preface + self.preface_height + self.BODY_PAD
@@ -268,20 +293,25 @@ class Tweet:
     Creates and sends the tweet containing the articles image.
     """
 
-    def __init__(self, api, title, keywords, source_url, img):
+    def __init__(self, api, article, image):
         self.api = api
-        self.title = title
-        self.keywords = keywords
-        self.source_url = source_url
+        self.title = article.title
+        self.keywords = article.keywords
+        self.source_url = article.source_url
         self.tweet = self.create_tweet()
-        self.img = img
+        self.img = image.path
 
     def create_tweet(self):
-        """Create the text that is tweeted by the bot"""
+        """
+        Create the text that is tweeted by the bot.
+        """
         tweet = self.title
-        if not tweet.startswith(("'", '"')):
+
+        # Put title in between quotes if it's not already
+        if not tweet.startswith(("'", '"')) or not tweet.endswith(("'", '"')):
             tweet = "'" + tweet + "'"
 
+        # Add hashtags
         with open('hashtags.json') as json_file:
             hashtag_dict = json.loads(json_file.read())
 
@@ -290,10 +320,13 @@ class Tweet:
             if keyword in hashtag_dict:
                 keyword_idx = tweet.casefold().find(keyword.casefold())
                 if len(tweet.split()) == 1 and keyword_idx != -1:
+                    # Add the hashtag in the tweet text
                     tweet = tweet[:keyword_idx] + '#' + tweet[keyword_idx:]
                 else:
-                    keyword_list.append('#' + hashtag_dict[keyword])
+                    # Display the hashtag below the tweet text
+                    keyword_list.append(hashtag_dict[keyword])
             elif not any(keyword in tweet for keyword in keyword.split()):
+                # Display the keyword below the tweet text
                 keyword_list.append(keyword)
 
         if self.source_url:
@@ -306,7 +339,9 @@ class Tweet:
         return tweet
 
     def send_tweet(self):
-        """Tweets the tweet text and image"""
+        """
+        Tweets the tweet text and image
+        """
         self.api.update_with_media(self.img, self.tweet)
         logger.debug('Posted new image')
 
@@ -314,8 +349,7 @@ class Tweet:
 if __name__ == '__main__':
     api = get_twitter_api()
     article = Article(api)
-    if article.new_article:
-        image = TextImage(article.title, article.preface, article.body)
-        tweet = Tweet(api, article.title, article.keywords,
-                      article.source_url, image.path)
-        tweet.send_tweet()
+    if article.new_article and article.is_valid:
+        image = TextImage(article)
+        tweet = Tweet(api, article, image)
+    tweet.send_tweet()
