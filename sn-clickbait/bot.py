@@ -18,7 +18,7 @@ class Article:
     Scrapes the last tweeted article from the website.
     """
 
-    USERNAME = 'soccernews_nl'
+    USERNAME = 'Soccernews_nl'
     SAVE_FILE = 'saved_url'
 
     def __init__(self, api, url=None):
@@ -44,7 +44,7 @@ class Article:
         Returns the last article url tweeted on Twitter account.
         """
         last_tweet = self.api.user_timeline(self.USERNAME, count=1)[0]
-        url = last_tweet.entities['urls'][0]['expanded_url']
+        url = last_tweet.entities['urls'][0]['url']
         url = unidecode.unidecode(url)
         logger.debug(url)
         return url
@@ -352,4 +352,4 @@ if __name__ == '__main__':
     if article.new_article and article.is_valid:
         image = TextImage(article)
         tweet = Tweet(api, article, image)
-    tweet.send_tweet()
+        tweet.send_tweet()
