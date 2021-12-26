@@ -2,7 +2,6 @@ import os
 import re
 import json
 import pickle
-import datetime
 import requests
 import unidecode
 from bs4 import BeautifulSoup
@@ -11,6 +10,8 @@ from PIL import Image
 from PIL import ImageDraw
 from .logger import logger
 from .utils import get_twitter_api
+
+CUSTOM_URL = None
 
 
 class Article:
@@ -30,12 +31,13 @@ class Article:
             self.url = self.retrieve_url()
             self.new_article = self.check_new_url()
 
-        if self.new_article:
+        if self.new_article or CUSTOM_URL:
             self.soup = self.get_article_soup()
             self.title = self.parse_title()
             self.preface = self.parse_preface()
             self.keywords = self.parse_keywords()
             self.body = self.parse_body()
+            self.text = ' '.join(self.body)
             self.is_valid = self.check_article()
             self.source_url = self.get_source_url()
 
@@ -53,7 +55,7 @@ class Article:
         """
         Returns True is the bot has not encountered the article before.
         Writes url of last article to pickle.
-         """
+        """
         file_exists = os.path.isfile(self.SAVE_FILE)
         if not file_exists:
             with open(self.SAVE_FILE, 'wb') as f:
@@ -105,10 +107,11 @@ class Article:
 
         body = []
         for paragraph in paragraphs:
-            if 'bet365' in paragraph:  # Ignore betting ads
+            # Ignore betting ads
+            if 'bet365' in paragraph:
                 continue
-            paragraph = re.sub(re.compile('<.*?>'), '',
-                               paragraph)  # Remove HTML tags
+            # Remove HTML tags
+            paragraph = re.sub(re.compile('<.*?>'), '', paragraph).strip()
             if paragraph:
                 body.append(paragraph)
         return body
@@ -123,21 +126,18 @@ class Article:
         """
         Filters the articles based on several criteria.
         """
-        text = ' '.join(self.body)
-        article_length = len(self.preface) + len(text)
+        article_length = len(self.preface) + len(self.text)
         if article_length < 400:
-            logger.debug(
-                'Check: Article too short ({} words)'.format(article_length))
+            logger.debug('Article too short ({} words)'.format(article_length))
             return False
         if article_length > 2000:
-            logger.debug(
-                'Check: Article too long ({} words)'.format(article_length))
+            logger.debug('Article too long ({} words)'.format(article_length))
             return False
         if 'twitter' in self.title.lower():
-            logger.debug('Check: Tweets')
+            logger.debug('Tweets')
             return False
         if self.title.lower().startswith(('de 11', 'opstelling')):
-            logger.debug('Check: Line-up')
+            logger.debug('Line-up')
             return False
         return True
 
@@ -145,35 +145,44 @@ class Article:
         """
         Attemps to find the article source and returns its url.
         """
-        text = ' '.join(self.body)
-        sources = ['Algemeen Dagblad', 'Voetbal International',
-                   'Telegraaf', 'Eindhovens Dagblad', 'Fox Sports']
-        if not any(w in text for w in sources) or '"' not in text:
+        sources = {'Algemeen Dagblad': '@ADnl',
+                   'Voetbal International': '@VI_nl',
+                   'Telegraaf': '@telegraaf',
+                   'Eindhovens Dagblad': '@ED_Regio',
+                   'ESPN': '@ESPNnl',
+                   'Parool': '@parool',
+                   'RTV Rijnmond': '@RTV_Rijnmond',
+                   'NOS': '@NOSsport',
+                   'NU.nl': 'NUnl',
+                   'NRC': '@nrc'}
+
+        sources_found = [w for w in sources.keys()
+                         if w in self.text or w in self.preface]
+
+        if not sources_found:
             return None
 
-        quote = text.split('"')[1]
+        quotes = re.findall('"(.+)"', self.text)
 
-        if len(quote) < 20:  # Too short to be meaningful
+        if not quotes:
             return None
 
-        try:
-            quote = quote[:250]  # Use first 250 characters for search
-            url = 'https://www.googleapis.com/customsearch/v1?key={}&cx={}&q={}'.format(
-                os.environ['API_KEY'], os.environ['SEARCH_ENGINE_ID'], quote)
+        for quote in quotes:
+            quote_words = quote.split()[:32]  # Use first 32 words for search
+            if len(quote_words) < 10:  # Too short to be meaningful
+                continue
+            quote = ' '.join(quote_words)
+            base_url = 'https://www.googleapis.com/customsearch/v1?key={}&cx={}&q={}'
+            url = base_url.format(os.environ['API_KEY'],
+                                  os.environ['SEARCH_ENGINE_ID'],
+                                  quote)
             data = requests.get(url).json()
             search_items = data.get('items')
-
             if search_items:
                 source_link = search_items[0].get('link')
-                date = search_items[0].get('pagemap')['metatags'][0].get(
-                    'article:published_time')[0:10]
-                timestamp = '{:%Y-%m-%d}'.format(datetime.datetime.now())
-                if date == timestamp:  # Published today
-                    logger.debug(source_link)
-                    return source_link
-        except Exception as e:
-            logger.error(e)
-        return None
+                logger.debug(source_link)
+                return source_link
+        return sources[sources_found[0]]  # Twitter handle
 
 
 class TextImage:
@@ -308,7 +317,7 @@ class Tweet:
         tweet = self.title
 
         # Put title in between quotes if it's not already
-        if not tweet.startswith(("'", '"')) or not tweet.endswith(("'", '"')):
+        if not tweet.startswith(("'", '"', '‘')) or not tweet.endswith(("'", '"', '’')):
             tweet = "'" + tweet + "'"
 
         # Add hashtags
@@ -348,8 +357,11 @@ class Tweet:
 
 if __name__ == '__main__':
     api = get_twitter_api()
-    article = Article(api)
+    article = Article(api, CUSTOM_URL)
     if article.new_article and article.is_valid:
         image = TextImage(article)
         tweet = Tweet(api, article, image)
-        tweet.send_tweet()
+        if CUSTOM_URL:
+            print(tweet.tweet)
+        else:
+            tweet.send_tweet()
