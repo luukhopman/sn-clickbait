@@ -11,7 +11,7 @@ from PIL import ImageDraw
 from .logger import logger
 from .utils import get_twitter_api
 
-CUSTOM_URL = None
+CUSTOM_URL = 'https://www.soccernews.nl/news/852409/oranjeinternational-heeft-voor-tweede-keer-corona'
 
 
 class Article:
@@ -162,8 +162,7 @@ class Article:
         if not sources_found:
             return None
 
-        quotes = re.findall('"(.+)"', self.text)
-
+        quotes = re.findall(r'"([^"]+)"', self.text)
         if not quotes:
             return None
 
@@ -171,7 +170,7 @@ class Article:
             quote_words = quote.split()[:32]  # Use first 32 words for search
             if len(quote_words) < 10:  # Too short to be meaningful
                 continue
-            quote = ' '.join(quote_words)
+            quote = '"' + ' '.join(quote_words) + '"'
             base_url = 'https://www.googleapis.com/customsearch/v1?key={}&cx={}&q={}'
             url = base_url.format(os.environ['API_KEY'],
                                   os.environ['SEARCH_ENGINE_ID'],
