@@ -11,7 +11,7 @@ from PIL import ImageDraw
 from .logger import logger
 from .utils import get_twitter_api
 
-CUSTOM_URL = 'https://www.soccernews.nl/news/852409/oranjeinternational-heeft-voor-tweede-keer-corona'
+CUSTOM_URL = None
 
 
 class Article:
@@ -31,7 +31,7 @@ class Article:
             self.url = self.retrieve_url()
             self.new_article = self.check_new_url()
 
-        if self.new_article or CUSTOM_URL:
+        if self.new_article:
             self.soup = self.get_article_soup()
             self.title = self.parse_title()
             self.preface = self.parse_preface()
@@ -103,12 +103,12 @@ class Article:
         Parses the body text from the article
         """
         paragraphs = str(self.soup.findAll('p')[1])
-        paragraphs = paragraphs.split('<blockquote')[0].split('</p><p>')
+        paragraphs = paragraphs.split('<blockquote')[0].split('<p>')
 
         body = []
         for paragraph in paragraphs:
-            # Ignore betting ads
-            if 'bet365' in paragraph:
+            # Ignore ads (links outside website)
+            if 'target="_blank"' in paragraph:
                 continue
             # Remove HTML tags
             paragraph = re.sub(re.compile('<.*?>'), '', paragraph).strip()
@@ -133,7 +133,7 @@ class Article:
         if article_length > 2000:
             logger.debug('Article too long ({} words)'.format(article_length))
             return False
-        if 'twitter' in self.title.lower():
+        if 'twitter' in self.title.lower() or 'greep uit de reacties' in self.text.lower():
             logger.debug('Tweets')
             return False
         if self.title.lower().startswith(('de 11', 'opstelling')):
@@ -361,6 +361,6 @@ if __name__ == '__main__':
         image = TextImage(article)
         tweet = Tweet(api, article, image)
         if CUSTOM_URL:
-            print(tweet.tweet)
+            logger.debug(tweet.tweet)
         else:
             tweet.send_tweet()
