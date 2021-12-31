@@ -144,7 +144,19 @@ class Article:
     def get_source_url(self):
         """
         Attemps to find the article source and returns its url.
+        Alternatively, it returns the Twitter handle of the journalist or source.
         """
+        journalists = {'Rik Elfrink': '@RikElfrink',
+                       'Mike Verweij': '@MikeVerweij',
+                       'Krabbendam': '@Mkrabby',
+                       'Fabrizio Romano': '@FabrizioRomano'}
+
+        journalists_found = [w for w in journalists.keys()
+                             if w in ' '.join([self.title, self.preface, self.text])]
+
+        if journalists_found:
+            return journalists[journalists_found[0]]
+
         sources = {'Algemeen Dagblad': '@ADnl',
                    'Voetbal International': '@VI_nl',
                    'Telegraaf': '@telegraaf',
@@ -152,12 +164,13 @@ class Article:
                    'ESPN': '@ESPNnl',
                    'Parool': '@parool',
                    'RTV Rijnmond': '@RTV_Rijnmond',
+                   'De Gelderlander': '@DeGelderlander',
                    'NOS': '@NOSsport',
                    'NU.nl': 'NUnl',
                    'NRC': '@nrc'}
 
         sources_found = [w for w in sources.keys()
-                         if w in self.text or w in self.preface]
+                         if w in ' '.join([self.title, self.preface, self.text])]
 
         if not sources_found:
             return None
@@ -327,7 +340,7 @@ class Tweet:
         for keyword in self.keywords:
             if keyword in hashtag_dict:
                 keyword_idx = tweet.casefold().find(keyword.casefold())
-                if len(tweet.split()) == 1 and keyword_idx != -1:
+                if len(keyword.split()) == 1 and keyword_idx != -1:
                     # Add the hashtag in the tweet text
                     tweet = tweet[:keyword_idx] + '#' + tweet[keyword_idx:]
                 else:
@@ -361,6 +374,6 @@ if __name__ == '__main__':
         image = TextImage(article)
         tweet = Tweet(api, article, image)
         if CUSTOM_URL:
-            logger.debug(tweet.tweet)
+            print(tweet.tweet)
         else:
             tweet.send_tweet()
