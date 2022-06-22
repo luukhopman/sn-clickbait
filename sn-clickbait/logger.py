@@ -1,5 +1,8 @@
 import logging
 
+FMT_SHELL = '%(levelname)s %(asctime)s %(message)s'
+FMT_FILE = '%(levelname)s %(asctime)s [%(filename)s:%(funcName)s:%(lineno)d] %(message)s'
+
 logger = logging.getLogger(__name__)
 
 shell_handler = logging.StreamHandler()
@@ -9,11 +12,8 @@ logger.setLevel(logging.DEBUG)
 shell_handler.setLevel(logging.DEBUG)
 file_handler.setLevel(logging.DEBUG)
 
-fmt_shell = '%(levelname)s %(asctime)s %(message)s'
-fmt_file = '%(levelname)s %(asctime)s [%(filename)s:%(funcName)s:%(lineno)d] %(message)s'
-
-shell_formatter = logging.Formatter(fmt_shell)
-file_formatter = logging.Formatter(fmt_file)
+shell_formatter = logging.Formatter(FMT_SHELL)
+file_formatter = logging.Formatter(FMT_FILE)
 
 shell_handler.setFormatter(shell_formatter)
 file_handler.setFormatter(file_formatter)

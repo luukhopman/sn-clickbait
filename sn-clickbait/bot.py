@@ -1,13 +1,13 @@
-import os
-import re
 import json
+import os
 import pickle
+import re
+
 import requests
 import unidecode
 from bs4 import BeautifulSoup
-from PIL import ImageFont
-from PIL import Image
-from PIL import ImageDraw
+from PIL import Image, ImageDraw, ImageFont
+
 from .logger import logger
 from .utils import get_twitter_api
 
@@ -103,7 +103,8 @@ class Article:
         Parses the body text from the article
         """
         paragraphs = str(self.soup.findAll('p')[1])
-        paragraphs = paragraphs.split('<blockquote')[0].split('<p>')
+        paragraphs = paragraphs.split('<blockquote', maxsplit=1)[0]
+        paragraphs = paragraphs.split('<p>')
 
         body = []
         for paragraph in paragraphs:
@@ -151,8 +152,8 @@ class Article:
                        'Krabbendam': '@Mkrabby',
                        'Fabrizio Romano': '@FabrizioRomano'}
 
-        journalists_found = [w for w in journalists.keys()
-                             if w in ' '.join([self.title, self.preface, self.text])]
+        journalists_found = [w for w in journalists if w in ' '.join(
+            [self.title, self.preface, self.text])]
 
         if journalists_found:
             return journalists[journalists_found[0]]  # Twitter handle
@@ -169,8 +170,8 @@ class Article:
                    'NU.nl': 'NUnl',
                    'NRC': '@nrc'}
 
-        sources_found = [w for w in sources.keys()
-                         if w in ' '.join([self.title, self.preface, self.text])]
+        sources_found = [w for w in sources if w in ' '.join(
+            [self.title, self.preface, self.text])]
 
         if not sources_found:
             return None
@@ -333,7 +334,7 @@ class Tweet:
             tweet = "'" + tweet + "'"
 
         # Add hashtags
-        with open('hashtags.json') as json_file:
+        with open('hashtags.json', encoding='utf-8') as json_file:
             hashtag_dict = json.loads(json_file.read())
 
         keyword_list = []
