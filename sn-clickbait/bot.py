@@ -46,7 +46,7 @@ class Article:
         Returns the last article url tweeted on Twitter account.
         """
         last_tweet = self.api.user_timeline(self.USERNAME, count=1)[0]
-        url = last_tweet.entities['urls'][0]['url']
+        url = last_tweet.entities['urls'][0]['expanded_url']
         url = unidecode.unidecode(url)
         logger.debug(url)
         return url
@@ -155,7 +155,7 @@ class Article:
                              if w in ' '.join([self.title, self.preface, self.text])]
 
         if journalists_found:
-            return journalists[journalists_found[0]]
+            return journalists[journalists_found[0]]  # Twitter handle
 
         sources = {'Algemeen Dagblad': '@ADnl',
                    'Voetbal International': '@VI_nl',
