@@ -34,10 +34,9 @@ class Article:
         if self.new_article:
             self.soup = self.get_article_soup()
             self.title = self.parse_title()
-            self.preface = self.parse_preface()
-            self.keywords = self.parse_keywords()
-            self.body = self.parse_body()
-            self.text = ' '.join(self.body)
+            self.content = self.parse_content()
+            self.text = ' '.join(self.content)
+            self.preface = self.content.pop(0)
             self.is_valid = self.check_article()
             self.source_url = self.get_source_url()
 
@@ -47,6 +46,7 @@ class Article:
         """
         last_tweet = self.api.user_timeline(self.USERNAME, count=1)[0]
         url = last_tweet.entities['urls'][0]['expanded_url']
+        # Transliterate an Unicode object into an ASCII string
         url = unidecode.unidecode(url)
         logger.debug(url)
         return url
@@ -57,20 +57,25 @@ class Article:
         Writes url of last article to pickle.
         """
         file_exists = os.path.isfile(self.SAVE_FILE)
+
+        # Create pickle file if it does not exist
         if not file_exists:
             with open(self.SAVE_FILE, 'wb') as f:
                 pickle.dump(self.url, f)
             return True
-        else:
-            with open(self.SAVE_FILE, 'rb') as f:
-                saved_url = pickle.load(f)
-            if self.url == saved_url:
-                logger.debug('No new article.')
-                return False
-            else:
-                with open(self.SAVE_FILE, 'wb') as f:
-                    pickle.dump(self.url, f)
-                return True
+
+        # Read pickle file
+        with open(self.SAVE_FILE, 'rb') as f:
+            saved_url = pickle.load(f)
+
+        # Check if article was already encountered
+        if self.url == saved_url:
+            logger.debug('No new article.')
+            return False
+
+        with open(self.SAVE_FILE, 'wb') as f:
+            pickle.dump(self.url, f)
+        return True
 
     def get_article_soup(self):
         """
@@ -90,23 +95,16 @@ class Article:
         """
         Parses the title from the article.
         """
-        return self.soup.find('h1', {'itemprop': 'headline'}).text
+        return self.soup.find('h1', {'class': 'entry-title'}).text
 
-    def parse_preface(self):
+    def parse_content(self):
         """
-        Parses the preface from the article.
+        Parses the content text from the article
         """
-        return self.soup.find('p', attrs={'class': 'prelude'}).text
+        content = self.soup.find('div', attrs={'class': 'entry-content'})
+        paragraphs = [p.text for p in content.find_all('p')]
 
-    def parse_body(self):
-        """
-        Parses the body text from the article
-        """
-        paragraphs = str(self.soup.findAll('p')[1])
-        paragraphs = paragraphs.split('<blockquote', maxsplit=1)[0]
-        paragraphs = paragraphs.split('<p>')
-
-        body = []
+        content = []
         for paragraph in paragraphs:
             # Ignore ads (links outside website)
             if 'target="_blank"' in paragraph:
@@ -114,8 +112,8 @@ class Article:
             # Remove HTML tags
             paragraph = re.sub(re.compile('<.*?>'), '', paragraph).strip()
             if paragraph:
-                body.append(paragraph)
-        return body
+                content.append(paragraph)
+        return content
 
     def parse_keywords(self):
         """
@@ -207,7 +205,7 @@ class TextImage:
 
     TITLE_FONT = ImageFont.truetype('fonts/Roboto-Bold.ttf', 44)
     PREFACE_FONT = ImageFont.truetype('fonts/Roboto-Medium.ttf', 38)
-    BODY_FONT = ImageFont.truetype('fonts/Roboto-Regular.ttf', 34)
+    content_FONT = ImageFont.truetype('fonts/Roboto-Regular.ttf', 34)
 
     BG_COLOR = (5, 5, 5)
     HIGHLIGHT_COLOR = (15, 140, 85)
@@ -215,30 +213,30 @@ class TextImage:
     SIDE_PAD = 25
     TITLE_PAD = 16
     PREFACE_PAD = 32
-    BODY_PAD = 32
+    content_PAD = 32
 
     OUT_PATH = 'img.png'
 
     def __init__(self, article):
         self.title = article.title
         self.preface = article.preface
-        self.body = article.body
+        self.content = article.content
 
         self.title_parsed = self.parse_text(self.title, self.TITLE_FONT)
         self.preface_parsed = self.parse_text(self.preface, self.PREFACE_FONT)
 
-        body_parsed = []
-        for paragraph in self.body:
-            parsed_paragraph = self.parse_text(paragraph, self.BODY_FONT)
-            body_parsed.append(parsed_paragraph)
-        self.body_parsed = '\n\n'.join(body_parsed)
+        content_parsed = []
+        for paragraph in self.content:
+            parsed_paragraph = self.parse_text(paragraph, self.content_FONT)
+            content_parsed.append(parsed_paragraph)
+        self.content_parsed = '\n\n'.join(content_parsed)
 
         self.title_height = TextImage.get_text_height(self.title_parsed,
                                                       self.TITLE_FONT)
         self.preface_height = TextImage.get_text_height(self.preface_parsed,
                                                         self.PREFACE_FONT)
-        self.body_height = TextImage.get_text_height(self.body_parsed,
-                                                     self.BODY_FONT)
+        self.content_height = TextImage.get_text_height(self.content_parsed,
+                                                        self.content_FONT)
 
         self.path = self.draw_image()
 
@@ -278,9 +276,9 @@ class TextImage:
         """
         y_title = self.TITLE_PAD
         y_preface = y_title + self.title_height + self.PREFACE_PAD
-        y_body = y_preface + self.preface_height + self.BODY_PAD
+        y_content = y_preface + self.preface_height + self.content_PAD
 
-        img_height = y_body + self.body_height + self.BODY_PAD
+        img_height = y_content + self.content_height + self.content_PAD
         img = Image.new('RGBA',
                         size=(self.IMG_WIDTH, img_height),
                         color=self.BG_COLOR)
@@ -301,10 +299,10 @@ class TextImage:
                text=self.preface_parsed,
                font=self.PREFACE_FONT)
 
-        # Draw body
-        d.text(xy=(self.SIDE_PAD, y_body),
-               text=self.body_parsed,
-               font=self.BODY_FONT)
+        # Draw content
+        d.text(xy=(self.SIDE_PAD, y_content),
+               text=self.content_parsed,
+               font=self.content_FONT)
 
         img.save(self.OUT_PATH)
         return self.OUT_PATH
@@ -318,7 +316,7 @@ class Tweet:
     def __init__(self, api, article, image):
         self.api = api
         self.title = article.title
-        self.keywords = article.keywords
+        self.preface = article.preface
         self.source_url = article.source_url
         self.tweet = self.create_tweet()
         self.img = image.path
@@ -337,26 +335,22 @@ class Tweet:
         with open('hashtags.json', encoding='utf-8') as json_file:
             hashtag_dict = json.loads(json_file.read())
 
-        keyword_list = []
-        for keyword in self.keywords:
-            if keyword in hashtag_dict:
-                keyword_idx = tweet.casefold().find(keyword.casefold())
-                if len(keyword.split()) == 1 and keyword_idx != -1:
-                    # Add the hashtag in the tweet text
-                    tweet = tweet[:keyword_idx] + '#' + tweet[keyword_idx:]
-                else:
-                    # Display the hashtag below the tweet text
-                    keyword_list.append(hashtag_dict[keyword])
-            elif not any(keyword in tweet for keyword in keyword.split()):
-                # Display the keyword below the tweet text
-                keyword_list.append(keyword)
+        hashtags = []
+        for keyword, hashtag in hashtag_dict.items():
+            keyword_idx = tweet.casefold().find(keyword.casefold())
+            if len(keyword.split()) == 1 and keyword_idx != -1:
+                # Add the hashtag in the tweet text
+                tweet = tweet[:keyword_idx] + '#' + tweet[keyword_idx:]
+            elif keyword in self.preface:
+                # Display the hashtag below the tweet text
+                hashtags.append(hashtag)
 
         if self.source_url:
             tweet += '\n\n\U0001f4dd {}'.format(self.source_url)
 
-        if keyword_list:
-            keywords = '(' + ', '.join(keyword_list) + ')'
-            tweet += '\n\n{}'.format(keywords)
+        if hashtags:
+            hashtags_tweet = '(' + ', '.join(hashtags) + ')'
+            tweet += '\n\n{}'.format(hashtags_tweet)
 
         return tweet
 
@@ -368,7 +362,10 @@ class Tweet:
         logger.debug('Posted new image')
 
 
-if __name__ == '__main__':
+def main():
+    """
+    Main loop of the bot.
+    """
     api = get_twitter_api()
     article = Article(api, CUSTOM_URL)
     if article.new_article and article.is_valid:
@@ -378,3 +375,7 @@ if __name__ == '__main__':
             print(tweet.tweet)
         else:
             tweet.send_tweet()
+
+
+if __name__ == '__main__':
+    main()
