@@ -349,7 +349,7 @@ class Tweet:
             tweet += '\n\n\U0001f4dd {}'.format(self.source_url)
 
         if hashtags:
-            hashtags_tweet = '(' + ', '.join(hashtags) + ')'
+            hashtags_tweet = '(' + ', '.join(set(hashtags)) + ')'
             tweet += '\n\n{}'.format(hashtags_tweet)
 
         return tweet
